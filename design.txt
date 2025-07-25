@@ -115,3 +115,146 @@ technical needs/concerns:
         a. we may be able to optimistically query >1 lm's for action choice at state S, retrying on conflict
 
 
+
+hypothetical info panel:
+
+Prompt:
+<prompt>
+
+Documentation:
+<documentation>
+
+Game Info:
+Current Turn: 10
+
+Player Info:
+Name: scipio africanus
+Sex: M
+Health: 100/100
+Hunger: 0/100
+Location: 25, -22
+Movement Points: 5 / 20 
+Inventory:
+    10x Primitive Materials
+    4x Food
+Skills:
+    Farming: 0/100
+    Mining: 10/100
+    Forestry: 30/100
+    Production: 70/100
+    Warfare: 60/100
+
+Journal:
+1) note to self: need to tend farmland asap
+2) ...
+
+Map View:
+<rendered map>
+
+Events This Turn:
+1. player 'marcus agrippa' moved into view, now at 30,22
+2. player 'marcus agrippa' said "i'm going mining up north, would someone mind tending the farm?"
+3. you whispered player 'marcus agrippa' with the message 'i don't think that would be a good idea'
+
+Structures in View:
+Primitive Farm:
+    id: structure-30
+    Position:
+        world: 30, -24
+        relative: +5, -2
+        distance: 7
+    Health: 90/100
+    Last Tended: 7 turns ago
+    Growth Progress: 6/10
+    Harvest Yield: 0 Food
+    Available Actions: None
+    Unavailable Actions:
+        'Destroy Farm' (out of range)
+
+
+Available Actions:
+1) move towards world coordinate 
+2) move in relative direction
+3) say something out loud
+4) whisper player 'marcus agrippa' something
+
+3) move to primtive farm (id: structure-30)
+4) destroy primitive farm
+
+
+....
+Sample Json Actions:
+{
+    'action': 'move_towards_world_coordinate',
+    'arguments': {'x': 30, 'y': 30}
+}
+{
+    'action': 'select_action',
+    'arguments': {'selected_action': 2}
+}
+
+
+
+main game loop pseudocode:
+
+
+S = WorldState()
+main:
+    groups = graphSplitPlayers(S.players)   // connected subgraphs where nodes are players, edges if within movement + view range, to ensure no race conditions
+    for group in groups:                    // .. race conditions wouldn't crash us, but would poison llm context windows with stale/invalid state
+        await runGroupTurn(S, group)
+
+
+async runGroupTurn(S, players):
+    queue = new Queue()
+    insertInRandomOrder(queue, players)
+    while notEmpty(queue):
+        player = queue.pop()
+        turn_ended = await runPlayerTurn(S, player, retries=2)
+        if not turn_ended:
+            queue.insert(player)
+            
+
+async runPlayerTurn(S, player, retries):
+    if retries == 0 return true
+    view = computeViewFor(S, player)                        // ideally, just data; serializable and http-sendable
+    actions = await choose_actions(player, view, GAME_CONFIG)
+    for action in actions:
+        ok, err = execute_action(S, action)                      // atomic on the 1-action level; either it succeeds or does nothing
+        if not ok:
+            log_error(err, S, player, action, actions)
+            await runPlayerTurn(S, player, retries - 1)
+    
+
+type View {
+    tilesInView,
+    structuresInView,
+    playersInView,
+    
+}
+
+
+code/style notes:
+    - C style, use enums, interfaces, types for data
+    - pure functions where possible
+example:
+    writing choose_action(player,view,config)
+    this way, we can have some sort of LLM inference handler available in that function
+    switch on player id, call associated function
+    or something like that.
+    lets us differentiate by model types
+    or later, can just plug in wait_for_client_response
+    versus Player.choose_action where then we need the logic to live on the player
+    the logic that lives on the player could also just call wait_for_client_response
+    but this seems cleaner? idk.
+
+
+
+
+
+
+
+
+
+
+

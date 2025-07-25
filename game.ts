@@ -1,166 +1,26 @@
+import type { 
+    TileData,
+    TileInstance,
+    StructureData,
+    StructureInstance,
+    ItemType,
+    ItemData,
+    ItemStack,
+    ItemInstance,
+    Sprite,
+    Position,
+    Player,
+    FarmInstance,
+} from './types';
 
-// tile variants
-enum TileType {
-    GRASSLAND = 0,
-    DESERT = 1,
-    MOUNTAIN = 2,
-    WATER = 3,
-    FOREST = 4,
-    ORE = 5,
-    NULL = 6
-}
+import {
+    StructureType,
+    TierType,
+    TileType,
+    TILE_DATA,
+    STRUCTURE_DATA
+} from './types';
 
-// tile attributes which are common across all instances
-type TileData = {
-    sprite: Sprite;
-    name: string;
-    desc: string;
-    show_value: boolean;     // is the associated 'value' meaningful for this type?
-    value_str: string;       // if so, what does it mean? (e.g. speed, richness, etc)
-}
-
-// associates tile variants with their attributes, for rendering and in-game information 
-const TILE_DATA = {
-    [TileType.GRASSLAND]: {
-        sprite: { char: '.', color: 'green' },
-        name: 'grassland',
-        desc: 'can be foraged for food equal to the tile\'s richness, or turned into a farm',
-        show_value: true,
-        value_str: 'richness'
-    },
-    [TileType.FOREST]: {
-        sprite: { char: 'T', color: 'green' },
-        name: 'forest',
-        desc: 'can be harvested for timber equal to the tile\'s richness',
-        show_value: true,
-        value_str: 'richness'
-    },
-    [TileType.NULL]: {
-        sprite: { char: ' ', color: 'white' },
-        name: 'null',
-        desc: 'this tile exists off the edge of the earth, and is inaccessable',
-        show_value: false,
-        value_str: ''
-    }
-} as Record<TileType, TileData>;
-
-// uniquely identifies a single tile's variant and attributes
-interface TileInstance {
-    type: TileType;
-    value: number;
-}
-
-enum StructureType {
-    FARM = 0,
-    MINE = 1,
-    WAREHOUSE = 2,
-    ROAD = 3,
-    FACTORY = 4,
-    ARMORY = 5,
-    HOUSE = 6,
-    LIBRARY = 7,
-}
-
-enum TierType {
-    PRIMITIVE = 0,
-    INDUSTRIAL = 1,
-    ADVANCED = 2
-}
-
-type StructureData = {
-    sprite: Sprite;
-    name: string;
-    desc: string;
-}
-
-const STRUCTURE_DATA: Partial<Record<StructureType, Partial<Record<TierType, StructureData>>>>  = {
-    [StructureType.FARM]: {
-        [TierType.PRIMITIVE]: {
-            sprite: {char: 'f', color: 'brown'},
-            name: 'primitive farm',
-            desc: 'produces a small amount of food at harvest time. must be tended frequently'
-        },
-    }
-};
-
-interface StructureInstance {
-    type: StructureType;
-    tier: TierType;
-}
-
-interface FarmInstance extends StructureInstance {
-    health: number;
-    lastTilled: number;
-    growth: number;
-    yield: number;
-}
-
-enum ItemType {
-    food = 0,
-    metal = 1,
-    timber = 2,
-    material = 3,
-    weaponry = 4,
-}
-
-interface ItemData {
-    type: ItemType;
-    tier: TierType;
-    name: string;
-    desc: string;
-    weight: number;
-}
-
-interface ItemInstance {
-    type: ItemType;
-    tier: TierType;
-}
-
-interface ItemStack {
-    instance: ItemInstance;
-    qty: number;
-}
-
-type Sprite = {
-    char: string;
-    color: string;
-}
-
-type Position = {
-    x: number;
-    y: number;
-}
-
-type Player = {
-    name: string;
-    sprite: Sprite;
-}
-
-interface ActionData {
-    name: string;
-    duration: number;
-    desc: string;
-    inputs: ItemInstance[];
-    outputs: ItemInstance[];
-}
-
-function generateTiles(size: number): TileInstance[][] {
-    const default_fill: TileInstance = {
-        type: TileType.GRASSLAND,
-        value: 1
-    };
-
-    const forest_tile: TileInstance = {
-        type: TileType.FOREST,
-        value: 99
-    }
-
-    const grid: TileInstance[][] = Array(size).fill(null).map(() => 
-        Array(size).fill(default_fill)
-    );
-    grid[0][0] = forest_tile;
-    return grid;
-}
 
 function generateStructures(state: WorldState): void {
     const example_structure: FarmInstance = {
@@ -171,15 +31,17 @@ function generateStructures(state: WorldState): void {
         growth: 0,
         yield: 10,
     }
-    state.spawnStructure(example_structure, {x: 2, y: 2});
+    state.spawnStructure(example_structure, {x: 0, y: -1});
+    state.spawnStructure(example_structure, {x: -1, y: 0});
 }
 
 function generatePlayers(state: WorldState): void {
     const example_player: Player = {
         name: 'dev',
-        sprite: { char: '@', color: 'orange' }
+        sprite: { char: '@', color: 'orange' },
+        viewport_size: 100
     }
-    state.spawnPlayer(example_player, {x: 10, y: 10});
+    state.spawnPlayer(example_player, {x: 0, y: 0});
 }
 
 function maybeStructureToAscii(mt: StructureInstance | undefined): string {
@@ -204,32 +66,47 @@ function maybePlayerToAscii(p: Player | undefined): string {
     return p.sprite.char;
 }
 
-function renderMap(state: WorldState, pos: Position, width: number, height: number): string[] {
+function getAsciiCharAt(state: WorldState, pos: Position): string {
+    let cellChar = ' ';
+    const maybeTile = state.getTileAt(pos.x, pos.y);
+    cellChar = maybeTileToAscii(maybeTile);
+
+    const maybeStructure = state.structures.getAt(pos);
+    if (maybeStructure !== undefined) {
+        cellChar = maybeStructureToAscii(maybeStructure);
+    }
+
+    const maybePlayer = state.players.getAt(pos);
+    if (maybePlayer !== undefined) {
+        cellChar = maybePlayerToAscii(maybePlayer)
+    }
+    return cellChar;
+}
+
+function renderMap(state: WorldState, center: Position, width: number, height: number): string[] {
     const lines: string[] = [];
+    const halfWidth = Math.floor(width / 2);
+    const halfHeight = Math.floor(height / 2);
+    
     for (let row = 0; row < height; row++) {
-        const y = pos.y + row;
+        const y = center.y + halfHeight - row; // Start from top of view area
         let rowData = '';
         for (let col = 0; col < width; col++) {
-            let cellChar = '?';
-            const x = pos.x + col;
-            const maybeTile = state.getTileAt(x,y);
-            cellChar = maybeTileToAscii(maybeTile);
-
-            const maybeStructure = state.structures.getAt({x: x, y: y});
-            if (maybeStructure !== undefined) {
-                cellChar = maybeStructureToAscii(maybeStructure);
-            }
-
-            const maybePlayer = state.players.getAt({x: x, y: y});
-            if (maybePlayer !== undefined) {
-                cellChar = maybePlayerToAscii(maybePlayer)
-            }
-            rowData += cellChar;
+            const x = center.x - halfWidth + col; // Start from left of view area
+            rowData += getAsciiCharAt(state, {x: x, y: y});
         }
         lines.push(rowData);
     }
     return lines;
 }
+
+//function getAvailableActions(state: WorldState, player: Player): void {
+//    let structure_actions = [];
+//    const structures_in_view = state.getStructuresInViewOf(player);
+//    for (let structure in structures_in_view) {
+//        const actions = get
+//    }
+//}
 
 function renderView(state: WorldState, pos: Position, width: number, height: number): string[] {
     const map = renderMap(state, pos, width, height);
@@ -246,19 +123,57 @@ class IdGenerator {
   }
 }
 
-class WorldState {
-    private static readonly size = 100;
+export class WorldState {
+    static readonly size = 100;
+    static readonly size_half = Math.floor(this.size / 2);
     readonly tiles: TileInstance[][];
     readonly structures = new SpatialIndex<StructureInstance>();
     readonly players = new SpatialIndex<Player>();
     private idGen = new IdGenerator();
 
     constructor() {
-        this.tiles = generateTiles(WorldState.size);
+        const default_fill: TileInstance = {
+            type: TileType.GRASSLAND,
+            value: 1
+        };
+        this.tiles = Array(WorldState.size).fill(null).map(() => 
+            Array(WorldState.size).fill(default_fill)
+        );
+
+        this.generateTiles(); 
         generateStructures(this);
         generatePlayers(this);
     }
 
+    private generateTiles(): void {
+        const ex_tree: TileInstance = {
+            type: TileType.FOREST,
+            value: 1
+        }
+        this.setTileAt(2,2, ex_tree);
+    }
+
+    private toArrayIndex(worldX: number, worldY: number): {row: number, col: number} | null {
+        const col = worldX + WorldState.size_half;
+        const row = -worldY + WorldState.size_half;
+        
+        if (col < 0 || col >= WorldState.size || row < 0 || row >= WorldState.size) {
+            return null;
+        }
+        
+        return { row, col };
+    }
+    
+    getWorldBounds() {
+        const half = WorldState.size_half;
+        return {
+            minX: -half,
+            maxX: half - 1,  // -50 to 49 for size 100
+            minY: -half,
+            maxY: half - 1
+        };
+    }
+    
     spawnStructure(s: StructureInstance, pos: Position) {
         const id = this.idGen.next('structure');
         this.structures.set(id, s, pos);
@@ -270,10 +185,17 @@ class WorldState {
     }
 
     getTileAt(x: number, y: number): TileInstance | null {
-        if (x < 0 || x >= WorldState.size || y < 0 || y >= WorldState.size) {
-            return null;
-        }
-        return this.tiles[y][x];
+        const indices = this.toArrayIndex(x,y);
+        if (!indices) return null;
+        return this.tiles[indices.row][indices.col];
+    }
+
+    setTileAt(x: number, y: number, t: TileInstance): boolean {
+        const indices = this.toArrayIndex(x,y);
+        if (!indices) return false;
+        
+        this.tiles[indices.row][indices.col] = t;
+        return true;
     }
 
     debug() {
