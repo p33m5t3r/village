@@ -50,9 +50,5 @@ export interface TileInstance {
     value: number;
 }
 
-export function serializeTiles(tiles: TileInstance[][]): Buffer {
-    // todo
-    return Buffer.alloc(0);
-}
 
 

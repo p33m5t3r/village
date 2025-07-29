@@ -1,54 +1,6 @@
-import path from 'path';
-import fs from 'fs/promises';
-import type { TileType, TileData, TileInstance } from './world/tiles';
-import { TILE_DATA, serializeTiles } from './world/tiles';
-
-const CONFIG = {
-    version: '0.0',
-    save_dir: 'saves',
-} as const;
-
-
-type State = {
-    metadata: {
-        version: string;
-        created: string;
-        worldSize: number;
-    };
-    turn: number,
-    tiles: number[][];
-}
-
-function stateInit(): State {
-    const worldSize = 100;
-    return {
-        metadata: {
-            version: CONFIG.version,
-            created: Date.now().toString(),
-            worldSize: 100,
-        },
-        turn: 0,
-        tiles: new Array(worldSize).map(() => new Array(worldSize)),
-    }
-}
-
-function stateSaveAs(s: State, save_name: string): boolean {
-    // todo; serializeTiles 
-    return true;
-}
-
-function stateLoadFrom(save_name: string): State {
-    // todo; actually load
-    return stateInit();
-}
-
-
-type View = 'todo';
-
-function viewStateFromSaveAs(save_name: string, playerId: string | undefined): View {
-    const state = stateLoadFrom(save_name);
-    return 'todo';
-}
+import { CONFIG } from './config';
+// import type { State } from './core/state';
+import { stateInit, stateSaveAs, viewStateFromSaveAs } from './core/state';
 
 function show_info(){
     console.log(`village version: ${CONFIG.version}`);
