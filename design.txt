@@ -201,7 +201,7 @@ Sample Json Actions:
 
 
 
-main game loop pseudocode:
+main game loop pseudocode (somewhat dated):
 
 
 S = WorldState()

@@ -1,5 +1,5 @@
 import { CONFIG } from './config';
-// import type { State } from './core/state';
+import type { ExecutionConfig } from './core/state';
 import { stateInit, stateSaveAs, viewStateFromSaveAs, execActionAsJson } from './core/state';
 
 function show_info(){
@@ -57,12 +57,17 @@ const commands: Record<string, Command> = {
         usage: 'village exec <save_name>',
         execute: async (args) => {
             const save_name = args[0];
+            const cfg: ExecutionConfig = {
+                atomic: true,
+                strictOrdering: true,
+            }
             if (!save_name) {
-                console.log('error: no save name given. exiting.');
-                return;
+                console.log('WARNING: running in preview mode, no changes will be made to any save files');
+            } else {
+                cfg.save_name = save_name;
             }
             const stdin = await Bun.stdin.text();
-            execActionAsJson(save_name, stdin);
+            execActionAsJson(save_name, stdin, cfg);
         }
     },
     

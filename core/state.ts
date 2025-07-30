@@ -4,6 +4,14 @@ import { TileType, TILE_DATA } from '../world/tiles';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+// ====== distance =====
+
+// todo
+
+
+
+// ====== state =======
+type TurnGroup = { queue: string[]; };  // player ids
 export type State = {
     metadata: {
         version: string;
@@ -11,9 +19,11 @@ export type State = {
         worldSize: number;
     };
     turn: number,
+    turnGroups: TurnGroup[]
+
     tiles: TileInstance[][];
     players: SpatialIndex<Player>;
-}
+};
 
 export type Position = {
     x: number;
@@ -114,11 +124,17 @@ class SpatialIndex<T> {
     }
 }
 
-// Runtime type - no position field
+
+type Stat = { current: number; max: number; };
+
 export type Player = {
     id: string;
     name: string;
     char: string;
+    viewDistance: number;
+    actionPoints: Stat;
+    movementPoints: Stat;
+    // later: skills: { farming: Stat; ...
 }
 
 // Serialization-only type
@@ -183,8 +199,35 @@ function generatePlayers(s: State): void {
         id: 'player-0',
         name: 'player 0',
         char: '@',
+        viewDistance: CONFIG.default_view_distance,
+        actionPoints: {
+            current: CONFIG.default_action_points,
+            max: CONFIG.default_action_points,
+        },
+        movementPoints: {
+            current: CONFIG.default_movement_points,
+            max: CONFIG.default_movement_points,
+        },
     };
     s.players.set(example_player.id, example_player, {x: 0, y: 0});
+}
+
+function assignTurnGroups(s: State): void {
+    // Collect all player IDs
+    const allPlayerIds = [];
+    for (const [id, , ] of s.players.entries()) {
+        allPlayerIds.push(id);
+    }
+    
+    // Shuffle for random turn order
+    for (let i = allPlayerIds.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allPlayerIds[i], allPlayerIds[j]] = [allPlayerIds[j], allPlayerIds[i]];
+    }
+    
+    // Put all into one group
+    // TODO: subgraph bucketing algorithm
+    s.turnGroups = [{ queue: allPlayerIds }];
 }
 
 export function stateInit(): State {
@@ -195,11 +238,13 @@ export function stateInit(): State {
             created: Date.now().toString(),
         },
         turn: 0,
+        turnGroups: new Array(),
         tiles: new Array(),
         players: new SpatialIndex<Player>(),
     }
     generateTiles(state);
     generatePlayers(state);
+    assignTurnGroups(state);
 
     return state;
 }
@@ -346,7 +391,7 @@ type Action = {
     params: Record<string, any>;
 };
 
-type ActionWithPlayer = Action & { playerId: string; };
+type PlayerAction = Action & { playerId: string; };
 
 type ParamSchema = {
     name: string;
@@ -374,7 +419,7 @@ type ActionData = {
     anticipatedEffects: (s: State, playerId: string, a: Action) => string;
 
     // validate action and, if successful, actually change the game state 
-    executeAction: (s: State, playerId: string, a: Action) => ActionResult;
+    execute: (s: State, playerId: string, a: Action) => ActionResult;
 };
 
 const ACTION_DATA: Record<ActionType, ActionData> = {
@@ -390,7 +435,7 @@ const ACTION_DATA: Record<ActionType, ActionData> = {
             const distance = Math.abs(a.params.x - currentPos.x) + Math.abs(a.params.y - currentPos.y);
             return `Move from (${currentPos.x},${currentPos.y}) to (${a.params.x},${a.params.y}) - distance: ${distance}`;
         },
-        executeAction: (s: State, playerId: string, a: Action) => {
+        execute: (s: State, playerId: string, a: Action) => {
             const startPos = s.players.getPosition(playerId)!;
             const endPos = { x: a.params.x, y: a.params.y };
             
@@ -423,14 +468,121 @@ const ACTION_DATA: Record<ActionType, ActionData> = {
 }
 
 
-function jsonIsActionWithPlayer(json_data: any): boolean {
+// turn logic
+function turnQueuesAreEmpty(s: State): boolean {
+    for (const group of s.turnGroups) {
+        if (group.queue.length > 0) return false;
+    }
+    return true;
+}
+
+function removePlayerFromQueue(s: State, playerId: string): number {
+    for (let i = 0; i < s.turnGroups.length; i++) {
+        const group = s.turnGroups[i];
+        const index = group.queue.indexOf(playerId);
+        if (index !== -1) {
+            group.queue.splice(index, 1);
+            return i; // return which group they were in
+        }
+    }
+    return -1; // player not found in any queue
+}
+
+function movePlayerToBackOfQueue(s: State, playerId: string): void {
+    const groupIndex = removePlayerFromQueue(s, playerId);
+    if (groupIndex !== -1) {
+        s.turnGroups[groupIndex].queue.push(playerId);
+    }
+}
+
+function runGameTick(s: State): void {
+    // update structures, tiles, research, etc
+    // nothing here yet! (dont fill me in unuless i ask)
+}
+
+function advanceTurnIfNecessary(s: State): void {
+    if (!turnQueuesAreEmpty(s)) return;
+
+    s.turn++;
+    runGameTick(s);
+    assignTurnGroups(s);
+}
+
+function playerIsInAnyQueue(s: State, playerId: string): boolean {
+    for (const group of s.turnGroups) {
+        if (group.queue.includes(playerId)) return true;
+    }
+    return false;
+}
+
+function playerIsAtFrontOfAnyQueue(s: State, playerId: string): boolean {
+    for (const group of s.turnGroups) {
+        if (group.queue.length > 0 && group.queue[0] === playerId) return true;
+    }
+    return false;
+}
+
+function isPlayersTurn(s: State, playerId: string, strictOrdering=true): boolean {
+    if (!strictOrdering) return playerIsInAnyQueue(s, playerId);
+    return playerIsAtFrontOfAnyQueue(s, playerId);
+}
+
+function canDoMoreThisTurn(s: State, playerId: string): boolean {
+    const player = s.players.get(playerId);
+    if (!player) return false;
+    
+    const can_move = player.movementPoints.current > 0;
+    const can_act = player.actionPoints.current > 0;
+    
+    return can_move || can_act;
+}
+
+function executePlayerAction(s: State, playerAction: PlayerAction, strictOrdering=true): ActionResult {
+    const { playerId, ...action } = playerAction;
+
+    if (!isPlayersTurn(s, playerId, strictOrdering)) {
+        return { ok: false, error: `player ${playerId} acted out of turn!` }
+    }
+    
+    const result = ACTION_DATA[action.type].execute(s, playerId, action);
+    if (result.ok) {
+        if (!canDoMoreThisTurn(s, playerId)) {
+            removePlayerFromQueue(s, playerId); 
+        } else {
+            movePlayerToBackOfQueue(s, playerId);
+        }
+    } else {
+        // todo: allow retries?
+        removePlayerFromQueue(s, playerId);
+    }
+    return result;
+}
+
+export type ExecutionConfig = {
+    atomic: boolean;                    // throw on failed actions
+    strictOrdering: boolean;            // can players act 'out of turn?'
+    save_name?: string;                 // if included, the save to serialize state to
+}
+
+function executePlayerActions(s: State, playerActions: PlayerAction[], cfg: ExecutionConfig): void {
+    for (const playerAction of playerActions) {
+        advanceTurnIfNecessary(s);
+        const result = executePlayerAction(s, playerAction, cfg.strictOrdering);
+        if (!result.ok && cfg.atomic) throw new Error(result.error);
+        console.log(result);
+    }
+    if (cfg.save_name) stateSaveAs(s, cfg.save_name);
+}
+
+
+function jsonIsPlayerAction(json_data: any): boolean {
     if (!json_data || typeof json_data !== 'object') return false;
     if (!json_data.type || !Object.values(ActionType).includes(json_data.type)) return false;
     if (!json_data.params || typeof json_data.params !== 'object') return false;
     return typeof json_data.playerId === 'string' && json_data.playerId.length > 0;
 }
 
-function validateActionParamsAgainstSchema(a: ActionWithPlayer): boolean {
+function validateActionParamsAgainstSchema(a: PlayerAction): boolean {
     const params = a.params;
     const actionData = ACTION_DATA[a.type];
     const schemas = actionData.paramSchemas;
@@ -446,56 +598,35 @@ function validateActionParamsAgainstSchema(a: ActionWithPlayer): boolean {
 }
 
 // also validates that the actions are correctly typed for further validation
-function parseActionsFromText(json_string: string): ActionWithPlayer[] {
+function parseActionsFromText(json_string: string): PlayerAction[] {
     const data = JSON.parse(json_string);
     if (!Array.isArray(data)) {
         throw new Error('actions must be an array!');
     }
     for (const item of data) {
-        if (!jsonIsActionWithPlayer(item)) {
-            throw new Error(`json does not parse to ActionWithPlayer:\n${JSON.stringify(item)}`);
+        if (!jsonIsPlayerAction(item)) {
+            throw new Error(`json does not parse to PlayerAction:\n${JSON.stringify(item)}`);
         }
         if (!validateActionParamsAgainstSchema(item)) {
             throw new Error(`action failed schema validation:\n${JSON.stringify(item)}`);
         }
     }
-    return data as ActionWithPlayer[];
+    return data as PlayerAction[];
 }
 
-function executeAction(state: State, playerId: string, action: Action): ActionResult {
-    return ACTION_DATA[action.type].executeAction(state, playerId, action);
-};
 
-export function execActionAsJson(save_name: string, json_string: string, preview_only=false): void {
+export function execActionAsJson(save_name: string, json_string: string, cfg: ExecutionConfig): void {
     try {
         const state = stateLoadFrom(save_name);
-        const actions = parseActionsFromText(json_string);
-        console.log(`parsed ${actions.length} actions. executing...`);
-        actions.forEach((actionWithPlayer, index) => {
-            const { playerId, ...action } = actionWithPlayer;
-            const result = executeAction(state, playerId, action);
-            if (result.ok) {
-                console.log(`Action ${index+1}/${actions.length} OK:\n${result.value.summary}`);
-            } else {
-                throw new Error(`Error executing action ${index+1}/${actions.length}:\n${result.error}`);
-            }
-        });
-        if (!preview_only) {
-            stateSaveAs(state, save_name);
-            console.log('done. saved updated game file!');
-        }
-
+        const playerActions = parseActionsFromText(json_string);
+        console.log(`parsed ${playerActions.length} actions. executing...`);
+        
+        executePlayerActions(state, playerActions, cfg);
     } catch (e) {
         console.error(`Error executing actions:\n${e}`);
         process.exit(1);
     }
 }
-
-
-
-
-
-
 
 
 
