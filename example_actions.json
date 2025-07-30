@@ -1,0 +1,10 @@
+[
+  {
+    "playerId": "player-0",
+    "type": "move",
+    "params": {
+      "x": 1,
+      "y": 1
+    }
+  }
+]

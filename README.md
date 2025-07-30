@@ -14,9 +14,9 @@ basic world:
     [x] basic save/load
     [x] basic view
 singleplayer:
-    [ ] add a player
-    [ ] add movement action
-    [ ] impl exec cmd
+    [x] add a player
+    [x] add movement action
+    [x] impl exec cmd
 multiplayer:
     [ ] add turn logic
     [ ] add claude code scaffold

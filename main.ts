@@ -1,6 +1,6 @@
 import { CONFIG } from './config';
 // import type { State } from './core/state';
-import { stateInit, stateSaveAs, viewStateFromSaveAs } from './core/state';
+import { stateInit, stateSaveAs, viewStateFromSaveAs, execActionAsJson } from './core/state';
 
 function show_info(){
     console.log(`village version: ${CONFIG.version}`);
@@ -57,8 +57,12 @@ const commands: Record<string, Command> = {
         usage: 'village exec <save_name>',
         execute: async (args) => {
             const save_name = args[0];
-            // TODO: implement
-            console.log('exec not implemented yet');
+            if (!save_name) {
+                console.log('error: no save name given. exiting.');
+                return;
+            }
+            const stdin = await Bun.stdin.text();
+            execActionAsJson(save_name, stdin);
         }
     },
     

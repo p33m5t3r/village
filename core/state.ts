@@ -334,5 +334,168 @@ export function viewStateFromSaveAs(save_name: string, playerId: string | undefi
     return renderViewText(view);
 }
 
+// ACTIONS
+
+const ActionType = {
+    MOVE: 'move',
+} as const;
+type ActionType = typeof ActionType[keyof typeof ActionType];
+
+type Action = {
+    type: ActionType;
+    params: Record<string, any>;
+};
+
+type ActionWithPlayer = Action & { playerId: string; };
+
+type ParamSchema = {
+    name: string;
+    desc: string;
+    type: 'string' | 'number' | 'boolean';
+    required: boolean;
+};
+
+type ActionEvent = {        
+    action: Action;         // action taken
+    playerId: string;       // who took the action
+    startPos: Position;     // world location where the action started
+    endPos?: Position;      // world location where the action ended (for movement)
+    summary: string;        // summary of the effects or reason for error
+};
+
+type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
+type ActionResult = Result<ActionEvent, string>;
+
+type ActionData = {
+    genericDesc: string;
+    paramSchemas: ParamSchema[];
+
+    // what to expect from exec'ing an action with given params for a player at state `s`
+    anticipatedEffects: (s: State, playerId: string, a: Action) => string;
+
+    // validate action and, if successful, actually change the game state 
+    executeAction: (s: State, playerId: string, a: Action) => ActionResult;
+};
+
+const ACTION_DATA: Record<ActionType, ActionData> = {
+    [ActionType.MOVE]: {
+        genericDesc: 'move to an (unoccupied) tile in absolute world coordinates, consuming movement points',
+        paramSchemas: [
+            { name: 'x', desc: 'target x coordinate', type: 'number', required: true },
+            { name: 'y', desc: 'target y coordinate', type: 'number', required: true }
+        ],
+        anticipatedEffects: (s: State, playerId: string, a: Action) => {
+            const currentPos = s.players.getPosition(playerId);
+            if (!currentPos) return 'crash game; invalid player id' // todo make this nicer
+            const distance = Math.abs(a.params.x - currentPos.x) + Math.abs(a.params.y - currentPos.y);
+            return `Move from (${currentPos.x},${currentPos.y}) to (${a.params.x},${a.params.y}) - distance: ${distance}`;
+        },
+        executeAction: (s: State, playerId: string, a: Action) => {
+            const startPos = s.players.getPosition(playerId)!;
+            const endPos = { x: a.params.x, y: a.params.y };
+            
+            // validate
+            // TODO: check movement points when implemented
+            if (s.players.isOccupied(endPos)) return {
+                ok: false,
+                error: 'target tile is occupied by another player'
+            };
+
+            // execute
+            const move_ok = s.players.move(playerId, endPos);
+            if (!move_ok) return {
+                ok: false,
+                error: 'failed to move player (likely invalid playerId)'
+            }
+            // TODO: consume movement points when implemented
+            return {
+                ok: true,
+                value: {
+                    action: a,
+                    playerId: playerId,
+                    startPos: startPos,
+                    endPos: endPos,
+                    summary: `${playerId} moved to (${endPos.x},${endPos.y})`
+                }
+            };
+        }
+    }
+}
+
+
+function jsonIsActionWithPlayer(json_data: any): boolean {
+    if (!json_data || typeof json_data !== 'object') return false;
+    if (!json_data.type || !Object.values(ActionType).includes(json_data.type)) return false;
+    if (!json_data.params || typeof json_data.params !== 'object') return false;
+    return typeof json_data.playerId === 'string' && json_data.playerId.length > 0;
+}
+
+function validateActionParamsAgainstSchema(a: ActionWithPlayer): boolean {
+    const params = a.params;
+    const actionData = ACTION_DATA[a.type];
+    const schemas = actionData.paramSchemas;
+    for (const schema of schemas) {
+        const value = params[schema.name];
+        if (schema.required && value === undefined) return false;
+        if (value === undefined) return true;   // not required, not given
+        if (schema.type === 'number' && typeof value !== 'number') return false;
+        if (schema.type === 'string' && typeof value !== 'string') return false;
+        if (schema.type === 'boolean' && typeof value !== 'boolean') return false;
+    }
+    return true;
+}
+
+// also validates that the actions are correctly typed for further validation
+function parseActionsFromText(json_string: string): ActionWithPlayer[] {
+    const data = JSON.parse(json_string);
+    if (!Array.isArray(data)) {
+        throw new Error('actions must be an array!');
+    }
+    for (const item of data) {
+        if (!jsonIsActionWithPlayer(item)) {
+            throw new Error(`json does not parse to ActionWithPlayer:\n${JSON.stringify(item)}`);
+        }
+        if (!validateActionParamsAgainstSchema(item)) {
+            throw new Error(`action failed schema validation:\n${JSON.stringify(item)}`);
+        }
+    }
+    return data as ActionWithPlayer[];
+}
+
+function executeAction(state: State, playerId: string, action: Action): ActionResult {
+    return ACTION_DATA[action.type].executeAction(state, playerId, action);
+};
+
+export function execActionAsJson(save_name: string, json_string: string, preview_only=false): void {
+    try {
+        const state = stateLoadFrom(save_name);
+        const actions = parseActionsFromText(json_string);
+        console.log(`parsed ${actions.length} actions. executing...`);
+        actions.forEach((actionWithPlayer, index) => {
+            const { playerId, ...action } = actionWithPlayer;
+            const result = executeAction(state, playerId, action);
+            if (result.ok) {
+                console.log(`Action ${index+1}/${actions.length} OK:\n${result.value.summary}`);
+            } else {
+                throw new Error(`Error executing action ${index+1}/${actions.length}:\n${result.error}`);
+            }
+        });
+        if (!preview_only) {
+            stateSaveAs(state, save_name);
+            console.log('done. saved updated game file!');
+        }
+
+    } catch (e) {
+        console.error(`Error executing actions:\n${e}`);
+        process.exit(1);
+    }
+}
+
+
+
+
+
+
+
 
 
