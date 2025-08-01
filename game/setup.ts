@@ -3,7 +3,7 @@ import { gameConfig } from '../config';
 import { setTileAt } from '../core/state';
 
 export function generateTiles(s: State): void {
-    const worldSize = s.metadata.worldSize;
+    const worldSize = s.worldSize;
     const default_fill: TileInstance = {
         type: TileType.GRASSLAND,
         value: 1
@@ -20,22 +20,30 @@ export function generateTiles(s: State): void {
     setTileAt(s, {x: 2, y: 2}, ex_tree);
 }
 
-
-export function generatePlayers(s: State): void {
-    const example_player: Player = {
-        id: 'player-0',
-        name: 'player 0',
+export function defaultPlayer(config = gameConfig): Player {
+    return {
+        id: 'new-player',
+        name: 'new-player',
         char: '@',
-        viewDistance: gameConfig.default_view_distance,
+        viewDistance: config.default_view_distance,
         actionPoints: {
-            current: gameConfig.default_action_points,
-            max: gameConfig.default_action_points,
+            current: config.default_action_points,
+            max: config.default_action_points,
         },
         movementPoints: {
-            current: gameConfig.default_movement_points,
-            max: gameConfig.default_movement_points,
+            current: config.default_movement_points,
+            max: config.default_movement_points,
         },
-    };
-    s.players.set(example_player.id, example_player, {x: 0, y: 0});
+    }
+}
+
+
+export function generatePlayers(s: State): void {
+    let example_player = defaultPlayer(s.config);
+    example_player.id = 'player-0';
+    example_player.name = 'player 0'
+    s.players.set(
+        example_player.id, example_player, {x: 0, y: 0}
+    );
 }
 

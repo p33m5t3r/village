@@ -28,8 +28,12 @@ multiplayer:
 testing/cleanup:
     [x] consider renaming some stuff
     [x] fix gigantic state file, break things out
-    [ ] make view fns cleaner, spectator friendly
-    [ ] write basic tests
+    [x] make view fns cleaner, spectator friendly
+    [x] write basic tests
+logging:
+    [ ] add basic system logging
+    [ ] add basic event logging
+    [ ] add event log to player views
 resources:
     [ ] add player inventory
     [ ] add foraging action

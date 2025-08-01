@@ -1,6 +1,7 @@
 import type { State } from '../core/types';
 import type { Action, ActionDefinition } from '../core/types';
 import { ActionType } from '../core/types';
+import { getDistance } from '../core/distance';
 
 
 export const actionRegistry: Record<ActionType, ActionDefinition> = {
@@ -13,15 +14,27 @@ export const actionRegistry: Record<ActionType, ActionDefinition> = {
         anticipatedEffects: (s: State, playerId: string, a: Action) => {
             const currentPos = s.players.getPosition(playerId);
             if (!currentPos) return 'crash game; invalid player id' // todo make this nicer
-            const distance = Math.abs(a.params.x - currentPos.x) + Math.abs(a.params.y - currentPos.y);
+            const distance = getDistance(currentPos, { x: a.params.x, y: a.params.y });
             return `Move from (${currentPos.x},${currentPos.y}) to (${a.params.x},${a.params.y}) - distance: ${distance}`;
         },
         execute: (s: State, playerId: string, a: Action) => {
+            const player = s.players.get(playerId);
+            if (!player) return {
+                ok: false,
+                error: 'invalid player id'
+            };
+
             const startPos = s.players.getPosition(playerId)!;
             const endPos = { x: a.params.x, y: a.params.y };
+            const moveCost = getDistance(startPos, endPos);
             
-            // validate
-            // TODO: check movement points when implemented
+            // validate movement points
+            if (player.movementPoints.current < moveCost) return {
+                ok: false,
+                error: `insufficient movement points: need ${moveCost}, have ${player.movementPoints.current}`
+            };
+
+            // validate target tile
             if (s.players.isOccupied(endPos)) return {
                 ok: false,
                 error: 'target tile is occupied by another player'
@@ -33,7 +46,10 @@ export const actionRegistry: Record<ActionType, ActionDefinition> = {
                 ok: false,
                 error: 'failed to move player (likely invalid playerId)'
             }
-            // TODO: consume movement points when implemented
+            
+            // consume movement points
+            player.movementPoints.current -= moveCost;
+            
             return {
                 ok: true,
                 value: {

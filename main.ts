@@ -32,7 +32,7 @@ const commands: Record<string, Command> = {
                 return;
             }
             console.log(`initializing world '${save_name}' in '${gameConfig.save_dir}'`);
-            const initial_state = initState();
+            const initial_state = initState(gameConfig);
             saveState(initial_state, save_name);
         }
     },

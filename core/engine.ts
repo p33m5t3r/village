@@ -4,6 +4,16 @@ import { ActionType, type ActionResult, type PlayerAction } from "./types";
 import { actionRegistry } from "../game/actions";
 
 
+// Simple seeded RNG for deterministic testing
+function seededRandom(seed: number) {
+    let state = seed;
+    return function() {
+        // Linear congruential generator
+        state = (state * 1664525 + 1013904223) % 4294967296;
+        return state / 4294967296;
+    };
+}
+
 export function assignTurnGroups(s: State): void {
     // Collect all player IDs
     const allPlayerIds = [];
@@ -11,9 +21,10 @@ export function assignTurnGroups(s: State): void {
         allPlayerIds.push(id);
     }
     
-    // Shuffle for random turn order
+    // Shuffle for random turn order using seeded RNG
+    const rng = seededRandom(s.seed);
     for (let i = allPlayerIds.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
+        const j = Math.floor(rng() * (i + 1));
         [allPlayerIds[i], allPlayerIds[j]] = [allPlayerIds[j], allPlayerIds[i]];
     }
     

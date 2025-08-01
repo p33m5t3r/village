@@ -1,4 +1,17 @@
 
+// ================= config ======================
+export type GameConfig = {
+    seed?: number;
+    version: string;
+    save_dir: string;
+    world_size: number;
+    default_action_points: number;
+    default_movement_points: number;
+    default_view_distance: number;
+    distance_function: 'manhattan' | 'euclidean';
+    max_turn_retries: number;
+};
+
 
 // ================= generic ======================
 export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
@@ -7,11 +20,11 @@ export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
 // ================= state ======================
 export type TurnQueue = string[];  // player ids
 export type State = {
-    metadata: {
-        version: string;
-        created: string;
-        worldSize: number;
-    };
+    config: GameConfig;
+    seed: number;
+    created: string;
+    worldSize: number;
+
     turn: number,
     turnQueues: TurnQueue[]
 

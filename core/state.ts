@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { gameConfig } from '../config';
-import type { State, Position, TileInstance, Player, SerializedPlayer } from './types';
+import type { State, Position, TileInstance, Player, SerializedPlayer, GameConfig } from './types';
 import { SpatialIndex } from './types';
 import { assignTurnGroups } from './engine';
 import { generateTiles, generatePlayers } from '../game/setup';
@@ -21,7 +21,7 @@ function toArrayIndex(worldPos: Position, worldSize: number): Position | null {
 }
 
 export function setTileAt(s: State, p: Position, t: TileInstance): boolean {
-    const arrayPos = toArrayIndex(p, s.metadata.worldSize);
+    const arrayPos = toArrayIndex(p, s.worldSize);
     if (!arrayPos) {
         return false;
     }
@@ -32,27 +32,35 @@ export function setTileAt(s: State, p: Position, t: TileInstance): boolean {
 }
 
 export function getTileAt(s: State, p: Position): TileInstance | undefined {
-    const arrayPos = toArrayIndex(p, s.metadata.worldSize);
+    const arrayPos = toArrayIndex(p, s.worldSize);
     if (!arrayPos) {
         return undefined;
     }
     return s.tiles[arrayPos.y][arrayPos.x];
 }
 
-export function initState(): State {
+function defaultWorldSetup(s: State): void {
+    generateTiles(s);
+    generatePlayers(s);
+}
+
+export function initState(
+    cfg: GameConfig,
+    setupFn: (s: State) => void = defaultWorldSetup
+): State {
     let state: State = {
-        metadata: {
-            version: gameConfig.version,
-            worldSize: gameConfig.world_size,
-            created: Date.now().toString(),
-        },
+        seed: cfg.seed ? cfg.seed : Date.now(),
+        config: cfg,
+        created: Date.now().toString(),
+        worldSize: gameConfig.world_size,
         turn: 0,
         turnQueues: new Array(),
         tiles: new Array(),
         players: new SpatialIndex<Player>(),
     }
-    generateTiles(state);
-    generatePlayers(state);
+
+
+    setupFn(state);
     assignTurnGroups(state);
 
     return state;
