@@ -1,5 +1,5 @@
 
-export const CONFIG = {
+export const gameConfig = {
     version: '0.0.0',
     save_dir: 'saves',
     world_size: 100,

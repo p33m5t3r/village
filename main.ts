@@ -1,9 +1,9 @@
-import { CONFIG } from './config';
+import { gameConfig } from './config';
 import type { ExecutionConfig } from './core/state';
-import { stateInit, stateSaveAs, viewStateFromSaveAs, execActionAsJson } from './core/state';
+import { initState, saveState, loadPlayerView, execActionAsJson } from './core/state';
 
 function show_info(){
-    console.log(`village version: ${CONFIG.version}`);
+    console.log(`village version: ${gameConfig.version}`);
     console.log('\nAvailable commands:');
     for (const cmd of Object.values(commands)) {
         console.log(`  ${cmd.usage}`);
@@ -29,9 +29,9 @@ const commands: Record<string, Command> = {
                 console.log('error: no save name given. exiting.');
                 return;
             }
-            console.log(`initializing world '${save_name}' in '${CONFIG.save_dir}'`);
-            const initial_state = stateInit();
-            stateSaveAs(initial_state, save_name);
+            console.log(`initializing world '${save_name}' in '${gameConfig.save_dir}'`);
+            const initial_state = initState();
+            saveState(initial_state, save_name);
         }
     },
     
@@ -46,7 +46,7 @@ const commands: Record<string, Command> = {
                 console.log('error: no save name given. exiting.');
                 return;
             }
-            const view = viewStateFromSaveAs(save_name, player_id);
+            const view = loadPlayerView(save_name, player_id);
             console.log(view);
         }
     },

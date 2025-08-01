@@ -20,7 +20,7 @@ singleplayer:
 multiplayer:
     [x] add turn logic
 testing/cleanup:
-    [ ] consider renaming some stuff
+    [x] consider renaming some stuff
     [ ] fix gigantic state file, break things out
     [ ] make view fns cleaner, spectator friendly
     [ ] write basic tests

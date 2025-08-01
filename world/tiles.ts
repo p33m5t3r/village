@@ -20,7 +20,7 @@ export type TileData = {
 }
 
 // associates tile variants with their attributes, for rendering and in-game information 
-export const TILE_DATA = {
+export const tileRegistry = {
     [TileType.GRASSLAND]: {
         char: '.',
         name: 'grassland',

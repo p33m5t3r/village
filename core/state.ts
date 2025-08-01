@@ -1,6 +1,6 @@
-import { CONFIG } from '../config';
+import { gameConfig } from '../config';
 import type { TileInstance, TileData } from '../world/tiles';
-import { TileType, TILE_DATA } from '../world/tiles';
+import { TileType, tileRegistry } from '../world/tiles';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -11,7 +11,7 @@ import * as path from 'node:path';
 
 
 // ====== state =======
-type TurnGroup = { queue: string[]; };  // player ids
+type TurnQueue = string[];  // player ids
 export type State = {
     metadata: {
         version: string;
@@ -19,7 +19,7 @@ export type State = {
         worldSize: number;
     };
     turn: number,
-    turnGroups: TurnGroup[]
+    turnQueues: TurnQueue[]
 
     tiles: TileInstance[][];
     players: SpatialIndex<Player>;
@@ -199,14 +199,14 @@ function generatePlayers(s: State): void {
         id: 'player-0',
         name: 'player 0',
         char: '@',
-        viewDistance: CONFIG.default_view_distance,
+        viewDistance: gameConfig.default_view_distance,
         actionPoints: {
-            current: CONFIG.default_action_points,
-            max: CONFIG.default_action_points,
+            current: gameConfig.default_action_points,
+            max: gameConfig.default_action_points,
         },
         movementPoints: {
-            current: CONFIG.default_movement_points,
-            max: CONFIG.default_movement_points,
+            current: gameConfig.default_movement_points,
+            max: gameConfig.default_movement_points,
         },
     };
     s.players.set(example_player.id, example_player, {x: 0, y: 0});
@@ -227,18 +227,18 @@ function assignTurnGroups(s: State): void {
     
     // Put all into one group
     // TODO: subgraph bucketing algorithm
-    s.turnGroups = [{ queue: allPlayerIds }];
+    s.turnQueues = [allPlayerIds];
 }
 
-export function stateInit(): State {
+export function initState(): State {
     let state: State = {
         metadata: {
-            version: CONFIG.version,
-            worldSize: CONFIG.world_size,
+            version: gameConfig.version,
+            worldSize: gameConfig.world_size,
             created: Date.now().toString(),
         },
         turn: 0,
-        turnGroups: new Array(),
+        turnQueues: new Array(),
         tiles: new Array(),
         players: new SpatialIndex<Player>(),
     }
@@ -249,11 +249,11 @@ export function stateInit(): State {
     return state;
 }
 
-export function stateSaveAs(s: State, save_name: string): boolean {
+export function saveState(s: State, save_name: string): boolean {
     try {
         // ensure save directory exists
-        if (!fs.existsSync(CONFIG.save_dir)) {
-            fs.mkdirSync(CONFIG.save_dir, { recursive: true });
+        if (!fs.existsSync(gameConfig.save_dir)) {
+            fs.mkdirSync(gameConfig.save_dir, { recursive: true });
         }
         
         // Extract players from SpatialIndex with their positions
@@ -268,7 +268,7 @@ export function stateSaveAs(s: State, save_name: string): boolean {
             players: serializedPlayers  // replace SpatialIndex with array
         };
         
-        const savePath = path.join(CONFIG.save_dir, `${save_name}.json`);
+        const savePath = path.join(gameConfig.save_dir, `${save_name}.json`);
         const json = JSON.stringify(serializable, null, 2);
         fs.writeFileSync(savePath, json);
         return true;
@@ -278,10 +278,10 @@ export function stateSaveAs(s: State, save_name: string): boolean {
     }
 }
 
-export function stateLoadFrom(save_name: string): State {
+export function loadState(save_name: string): State {
     // todo: do some version checks probably
     try {
-        const savePath = path.join(CONFIG.save_dir, `${save_name}.json`);
+        const savePath = path.join(gameConfig.save_dir, `${save_name}.json`);
         const json = fs.readFileSync(savePath, 'utf-8');
         const data = JSON.parse(json);
         
@@ -304,7 +304,7 @@ export function stateLoadFrom(save_name: string): State {
 
 // the view type is what players will have access to when choosing actions
 // since the average 'player' is assumed to be an LLM, this is what the tools/context will be built from
-export type View = {
+export type PlayerView = {
     playerInfo: {
         playerId: string;
     }
@@ -312,7 +312,7 @@ export type View = {
 }
 
 function renderTileAscii(t: TileInstance): string {
-    return TILE_DATA[t.type].char;
+    return tileRegistry[t.type].char;
 }
 
 function getMapCharAt(s: State, p: Position): string {
@@ -354,7 +354,7 @@ function renderMapText(s: State, playerId: string): string {
     return mapText;
 }
 
-function generateView(s: State, playerId: string): View {
+function generateView(s: State, playerId: string): PlayerView {
     return {
         playerInfo: {
             playerId: playerId,
@@ -364,7 +364,7 @@ function generateView(s: State, playerId: string): View {
 }
 
 // human-readable version of the view for cli output
-function renderViewText(v: View): string {
+function renderViewText(v: PlayerView): string {
     let output = '';
     output += `Player: ${v.playerInfo.playerId}\n`;
     output += `\n`;
@@ -372,8 +372,8 @@ function renderViewText(v: View): string {
     return output;
 }
 
-export function viewStateFromSaveAs(save_name: string, playerId: string | undefined): string {
-    const state = stateLoadFrom(save_name);
+export function loadPlayerView(save_name: string, playerId: string | undefined): string {
+    const state = loadState(save_name);
     const effectivePlayerId = playerId || 'spectator';
     const view = generateView(state, effectivePlayerId);
     return renderViewText(view);
@@ -411,7 +411,7 @@ type ActionEvent = {
 type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
 type ActionResult = Result<ActionEvent, string>;
 
-type ActionData = {
+type ActionDefinition = {
     genericDesc: string;
     paramSchemas: ParamSchema[];
 
@@ -422,7 +422,7 @@ type ActionData = {
     execute: (s: State, playerId: string, a: Action) => ActionResult;
 };
 
-const ACTION_DATA: Record<ActionType, ActionData> = {
+const actionRegistry: Record<ActionType, ActionDefinition> = {
     [ActionType.MOVE]: {
         genericDesc: 'move to an (unoccupied) tile in absolute world coordinates, consuming movement points',
         paramSchemas: [
@@ -470,28 +470,28 @@ const ACTION_DATA: Record<ActionType, ActionData> = {
 
 // turn logic
 function turnQueuesAreEmpty(s: State): boolean {
-    for (const group of s.turnGroups) {
-        if (group.queue.length > 0) return false;
+    for (const queue of s.turnQueues) {
+        if (queue.length > 0) return false;
     }
     return true;
 }
 
 function removePlayerFromQueue(s: State, playerId: string): number {
-    for (let i = 0; i < s.turnGroups.length; i++) {
-        const group = s.turnGroups[i];
-        const index = group.queue.indexOf(playerId);
+    for (let i = 0; i < s.turnQueues.length; i++) {
+        const queue = s.turnQueues[i];
+        const index = queue.indexOf(playerId);
         if (index !== -1) {
-            group.queue.splice(index, 1);
-            return i; // return which group they were in
+            queue.splice(index, 1);
+            return i; // return which queue they were in
         }
     }
     return -1; // player not found in any queue
 }
 
 function movePlayerToBackOfQueue(s: State, playerId: string): void {
-    const groupIndex = removePlayerFromQueue(s, playerId);
-    if (groupIndex !== -1) {
-        s.turnGroups[groupIndex].queue.push(playerId);
+    const queueIndex = removePlayerFromQueue(s, playerId);
+    if (queueIndex !== -1) {
+        s.turnQueues[queueIndex].push(playerId);
     }
 }
 
@@ -509,15 +509,15 @@ function advanceTurnIfNecessary(s: State): void {
 }
 
 function playerIsInAnyQueue(s: State, playerId: string): boolean {
-    for (const group of s.turnGroups) {
-        if (group.queue.includes(playerId)) return true;
+    for (const queue of s.turnQueues) {
+        if (queue.includes(playerId)) return true;
     }
     return false;
 }
 
 function playerIsAtFrontOfAnyQueue(s: State, playerId: string): boolean {
-    for (const group of s.turnGroups) {
-        if (group.queue.length > 0 && group.queue[0] === playerId) return true;
+    for (const queue of s.turnQueues) {
+        if (queue.length > 0 && queue[0] === playerId) return true;
     }
     return false;
 }
@@ -544,7 +544,7 @@ function executePlayerAction(s: State, playerAction: PlayerAction, strictOrderin
         return { ok: false, error: `player ${playerId} acted out of turn!` }
     }
     
-    const result = ACTION_DATA[action.type].execute(s, playerId, action);
+    const result = actionRegistry[action.type].execute(s, playerId, action);
     if (result.ok) {
         if (!canDoMoreThisTurn(s, playerId)) {
             removePlayerFromQueue(s, playerId); 
@@ -571,7 +571,7 @@ function executePlayerActions(s: State, playerActions: PlayerAction[], cfg: Exec
         if (!result.ok && cfg.atomic) throw new Error(result.error);
         console.log(result);
     }
-    if (cfg.save_name) stateSaveAs(s, cfg.save_name);
+    if (cfg.save_name) saveState(s, cfg.save_name);
 }
 
 
@@ -584,8 +584,8 @@ function jsonIsPlayerAction(json_data: any): boolean {
 
 function validateActionParamsAgainstSchema(a: PlayerAction): boolean {
     const params = a.params;
-    const actionData = ACTION_DATA[a.type];
-    const schemas = actionData.paramSchemas;
+    const actionDef = actionRegistry[a.type];
+    const schemas = actionDef.paramSchemas;
     for (const schema of schemas) {
         const value = params[schema.name];
         if (schema.required && value === undefined) return false;
@@ -617,7 +617,7 @@ function parseActionsFromText(json_string: string): PlayerAction[] {
 
 export function execActionAsJson(save_name: string, json_string: string, cfg: ExecutionConfig): void {
     try {
-        const state = stateLoadFrom(save_name);
+        const state = loadState(save_name);
         const playerActions = parseActionsFromText(json_string);
         console.log(`parsed ${playerActions.length} actions. executing...`);
         
