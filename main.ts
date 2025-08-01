@@ -1,6 +1,8 @@
 import { gameConfig } from './config';
-import type { ExecutionConfig } from './core/state';
-import { initState, saveState, loadPlayerView, execActionAsJson } from './core/state';
+import type { ExecutionConfig } from './core/types';
+import { initState, saveState } from './core/state';
+import { execActionAsJson } from './core/engine';
+import { loadPlayerView } from './core/views';
 
 function show_info(){
     console.log(`village version: ${gameConfig.version}`);

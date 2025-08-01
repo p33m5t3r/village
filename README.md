@@ -2,11 +2,17 @@
 
 village/
     main.ts
+    tests.ts
     core/
-        state.ts
-    world/
+        state.ts        # state management, spatial index
+        engine.ts       # turn logic, execution
+        player.ts       # state projection
+    game/
+        actions.ts
         tiles.ts
-        structures.ts
+        structures.ts   # not impl yet
+    llms/               # not impl yet
+        llms.ts         # not impl yet
 
 todo:
 basic world:
@@ -21,7 +27,7 @@ multiplayer:
     [x] add turn logic
 testing/cleanup:
     [x] consider renaming some stuff
-    [ ] fix gigantic state file, break things out
+    [x] fix gigantic state file, break things out
     [ ] make view fns cleaner, spectator friendly
     [ ] write basic tests
 resources:

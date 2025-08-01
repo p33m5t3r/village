@@ -1,23 +1,5 @@
-
-// tile variants
-export enum TileType {
-    GRASSLAND = 0,
-    DESERT = 1,
-    MOUNTAIN = 2,
-    WATER = 3,
-    FOREST = 4,
-    ORE = 5,
-    NULL = 6
-}
-
-// tile attributes which are common across all instances
-export type TileData = {
-    char: string;
-    name: string;
-    desc: string;
-    show_value: boolean;     // is the associated 'value' meaningful for this type?
-    value_str: string;       // if so, what does it mean? (e.g. speed, richness, etc)
-}
+import { TileType } from '../core/types';
+import type { TileData } from '../core/types';
 
 // associates tile variants with their attributes, for rendering and in-game information 
 export const tileRegistry = {
@@ -43,12 +25,5 @@ export const tileRegistry = {
         value_str: ''
     }
 } as Record<TileType, TileData>;
-
-// uniquely identifies a single tile's variant and attributes
-export interface TileInstance {
-    type: TileType;
-    value: number;
-}
-
 
 
