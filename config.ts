@@ -6,8 +6,8 @@ export const gameConfig = {
 
     // player defaults
     default_action_points: 1.0,
-    default_movement_points: 20,
-    default_view_distance: 20,
+    default_movement_points: 10,
+    default_view_distance: 10,
 
     // distance settings
     distance_function: 'manhattan' as const,    // or 'euclidean'

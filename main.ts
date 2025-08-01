@@ -2,7 +2,7 @@ import { gameConfig } from './config';
 import type { ExecutionConfig } from './core/types';
 import { initState, saveState } from './core/state';
 import { execActionAsJson } from './core/engine';
-import { loadPlayerView } from './core/views';
+import { renderView } from './core/views';
 
 function show_info(){
     console.log(`village version: ${gameConfig.version}`);
@@ -48,7 +48,7 @@ const commands: Record<string, Command> = {
                 console.log('error: no save name given. exiting.');
                 return;
             }
-            const view = loadPlayerView(save_name, player_id);
+            const view = renderView(save_name, player_id);
             console.log(view);
         }
     },

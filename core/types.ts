@@ -43,10 +43,9 @@ export type SerializedPlayer = Player & {
 };
 
 export type PlayerView = {
-    playerInfo: {
-        playerId: string;
-    }
-    map: string;
+    gameTurn: number;
+    player: Player & Position;
+    map: string[][];
 }
 
 // ================= actions ======================
