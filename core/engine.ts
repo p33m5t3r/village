@@ -1,4 +1,4 @@
-import type { State, Effect } from "./types";
+import type { State, Effect, GameEvent } from "./types";
 import { loadState, saveState } from "./state";
 import { ActionType, type ActionResult, type PlayerAction } from "./types";
 import { actionRegistry } from "../game/actions";
@@ -135,25 +135,83 @@ function applyEffects(s: State, effects: Effect[]): void {
     }
 }
 
-function executePlayerAction(s: State, playerAction: PlayerAction, strictOrdering=true): ActionResult {
+function executePlayerAction(s: State, playerAction: PlayerAction, strictOrdering=true): GameEvent[] {
     const { playerId, ...action } = playerAction;
 
+    // Check turn order first
     if (!isPlayersTurn(s, playerId, strictOrdering)) {
-        return { ok: false, error: `player ${playerId} acted out of turn!` }
+        return [{
+            id: "0",
+            turn: s.turn,
+            timestamp: Date.now().toString(),
+            type: 'PLAYER_ACTION',
+            playerId,
+            action,
+            effects: [],
+            success: false,
+            error: `player ${playerId} acted out of turn!`
+        }];
     }
     
-    const result = actionRegistry[action.type].execute(s, playerId, action);
-    if (result.ok) {
+    // Get the action event (no mutations yet)
+    const actionEvent = actionRegistry[action.type].execute(s, playerId, action);
+    const events: GameEvent[] = [actionEvent];
+    
+    // Add system events for queue management if action succeeded
+    if (actionEvent.success) {
         if (!canDoMoreThisTurn(s, playerId)) {
-            removePlayerFromQueue(s, playerId); 
+            // Remove from queue entirely
+            events.push({
+                id: "0",
+                turn: s.turn,
+                timestamp: Date.now().toString(),
+                type: 'SYSTEM',
+                operation: 'REMOVE_FROM_QUEUE',
+                effects: [{ type: 'UPDATE_QUEUE', queueIndex: 0, operation: 'remove', playerId }],
+                success: true
+            });
         } else {
-            movePlayerToBackOfQueue(s, playerId);
+            // Move to back of queue (remove then append)
+            const queueIndex = findPlayerQueueIndex(s, playerId);
+            if (queueIndex !== -1) {
+                events.push({
+                    id: "0",
+                    turn: s.turn,
+                    timestamp: Date.now().toString(),
+                    type: 'SYSTEM',
+                    operation: 'MOVE_TO_BACK_OF_QUEUE',
+                    effects: [
+                        { type: 'UPDATE_QUEUE', queueIndex, operation: 'remove', playerId },
+                        { type: 'UPDATE_QUEUE', queueIndex, operation: 'append', playerId }
+                    ],
+                    success: true
+                });
+            }
         }
     } else {
-        // todo: allow retries?
-        removePlayerFromQueue(s, playerId);
+        // Failed action - remove from queue
+        events.push({
+            id: "0",
+            turn: s.turn,
+            timestamp: Date.now().toString(),
+            type: 'SYSTEM',
+            operation: 'REMOVE_FROM_QUEUE',
+            effects: [{ type: 'UPDATE_QUEUE', queueIndex: 0, operation: 'remove', playerId }],
+            success: true
+        });
     }
-    return result;
+    
+    return events;
+}
+
+// Helper function to find which queue a player is in
+function findPlayerQueueIndex(s: State, playerId: string): number {
+    for (let i = 0; i < s.turnQueues.length; i++) {
+        if (s.turnQueues[i].includes(playerId)) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 export type ExecutionConfig = {
@@ -165,9 +223,20 @@ export type ExecutionConfig = {
 function executePlayerActions(s: State, playerActions: PlayerAction[], cfg: ExecutionConfig): void {
     for (const playerAction of playerActions) {
         advanceTurnIfNecessary(s);
-        const result = executePlayerAction(s, playerAction, cfg.strictOrdering);
-        if (!result.ok && cfg.atomic) throw new Error(result.error);
-        console.log(result);
+        const events = executePlayerAction(s, playerAction, cfg.strictOrdering);
+        
+        // Apply each event: log first, then apply effects
+        for (const event of events) {
+            s.eventLog.push(event);
+            applyEffects(s, event.effects);
+            
+            // For atomic mode, throw on failed actions
+            if (!event.success && cfg.atomic && event.type === 'PLAYER_ACTION') {
+                throw new Error(event.error || 'Action failed');
+            }
+            
+            console.log(event);
+        }
     }
     if (cfg.save_name) saveState(s, cfg.save_name);
 }

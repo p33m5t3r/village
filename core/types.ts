@@ -82,7 +82,7 @@ export type GameEvent = {
     error?: string;
 } & (
     | { type: 'PLAYER_ACTION'; playerId: string; action: Action }
-    | { type: 'SYSTEM'; operation: 'ADVANCE_TURN' | 'ASSIGN_TURN_GROUPS'; details?: any }
+    | { type: 'SYSTEM'; operation: 'ADVANCE_TURN' | 'ASSIGN_TURN_GROUPS' | 'REMOVE_FROM_QUEUE' | 'MOVE_TO_BACK_OF_QUEUE'; details?: any }
 );
 
 // ================= actions ======================
@@ -121,8 +121,8 @@ export type ActionDefinition = {
     // what to expect from exec'ing an action with given params for a player at state `s`
     anticipatedEffects: (s: State, playerId: string, a: Action) => string;
 
-    // validate action and, if successful, actually change the game state 
-    execute: (s: State, playerId: string, a: Action) => ActionResult;
+    // validate action and return complete GameEvent with effects
+    execute: (s: State, playerId: string, a: Action) => GameEvent;
 };
 
 
