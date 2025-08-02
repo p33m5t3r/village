@@ -79,8 +79,8 @@ function renderViewText(v: PlayerView): string {
     output += `Turn: ${v.gameTurn}\n`;
     output += `Player: ${v.player.name} (${v.player.id})\n`;
     output += `Position: (${v.player.x}, ${v.player.y})\n`;
-    output += `Movement Points: ${v.player.movementPoints.current}/${v.player.movementPoints.max}\n`;
-    output += `Action Points: ${v.player.actionPoints.current}/${v.player.actionPoints.max}\n`;
+    output += `Movement Points: ${v.player.resources.movement.current}/${v.player.resources.movement.max}\n`;
+    output += `Action Points: ${v.player.resources.action.current}/${v.player.resources.action.max}\n`;
     output += `\n`;
     
     // Render the 2D array as ASCII art

@@ -1,4 +1,4 @@
-import { TileType, type State, type TileInstance, type Player } from '../core/types';
+import { TileType, type State, type TileInstance, type Player, ResourceType } from '../core/types';
 import { gameConfig } from '../config';
 import { setTileAt } from '../core/state';
 
@@ -26,13 +26,15 @@ export function defaultPlayer(config = gameConfig): Player {
         name: 'new-player',
         char: '@',
         viewDistance: config.default_view_distance,
-        actionPoints: {
-            current: config.default_action_points,
-            max: config.default_action_points,
-        },
-        movementPoints: {
-            current: config.default_movement_points,
-            max: config.default_movement_points,
+        resources: {
+            [ResourceType.ACTION]: {
+                current: config.default_action_points,
+                max: config.default_action_points,
+            },
+            [ResourceType.MOVEMENT]: {
+                current: config.default_movement_points,
+                max: config.default_movement_points,
+            },
         },
     }
 }

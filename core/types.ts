@@ -30,6 +30,7 @@ export type State = {
 
     tiles: TileInstance[][];
     players: SpatialIndex<Player>;
+    eventLog: GameEvent[];
 };
 
 export type Position = {
@@ -39,15 +40,18 @@ export type Position = {
 
 
 // ================= players ======================
+export enum ResourceType {
+    MOVEMENT = 'movement',
+    ACTION = 'action',
+}
+
 export type Stat = { current: number; max: number; };
 export type Player = {
     id: string;
     name: string;
     char: string;
     viewDistance: number;
-    actionPoints: Stat;
-    movementPoints: Stat;
-    // later: skills: { farming: Stat; ...
+    resources: Record<ResourceType, Stat>;
 };
 
 // Serialization-only type
@@ -60,6 +64,26 @@ export type PlayerView = {
     player: Player & Position;
     map: string[][];
 }
+
+// ================= effects ======================
+export type Effect = 
+  | { type: 'MOVE_PLAYER'; playerId: string; from: Position; to: Position }
+  | { type: 'ALTER_RESOURCE'; entityId: string; resource: ResourceType; field: 'current' | 'max'; delta: number }
+  | { type: 'UPDATE_QUEUE'; queueIndex: number; operation: 'remove' | 'append'; playerId: string }
+  | { type: 'SET_TURN'; turn: number };
+
+// ================= events ======================
+export type GameEvent = {
+    id: string;
+    turn: number;
+    timestamp: string;
+    effects: Effect[];
+    success: boolean;
+    error?: string;
+} & (
+    | { type: 'PLAYER_ACTION'; playerId: string; action: Action }
+    | { type: 'SYSTEM'; operation: 'ADVANCE_TURN' | 'ASSIGN_TURN_GROUPS'; details?: any }
+);
 
 // ================= actions ======================
 export enum ActionType {

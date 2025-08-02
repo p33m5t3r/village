@@ -57,6 +57,7 @@ export function initState(
         turnQueues: new Array(),
         tiles: new Array(),
         players: new SpatialIndex<Player>(),
+        eventLog: new Array(),
     }
 
 

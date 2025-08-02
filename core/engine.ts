@@ -1,4 +1,4 @@
-import type { State } from "./types";
+import type { State, Effect } from "./types";
 import { loadState, saveState } from "./state";
 import { ActionType, type ActionResult, type PlayerAction } from "./types";
 import { actionRegistry } from "../game/actions";
@@ -97,10 +97,42 @@ function canDoMoreThisTurn(s: State, playerId: string): boolean {
     const player = s.players.get(playerId);
     if (!player) return false;
     
-    const can_move = player.movementPoints.current > 0;
-    const can_act = player.actionPoints.current > 0;
+    const can_move = player.resources.movement.current > 0;
+    const can_act = player.resources.action.current > 0;
     
     return can_move || can_act;
+}
+
+function applyEffects(s: State, effects: Effect[]): void {
+    for (const effect of effects) {
+        switch (effect.type) {
+            case 'MOVE_PLAYER':
+                s.players.move(effect.playerId, effect.to);
+                break;
+                
+            case 'ALTER_RESOURCE':
+                const player = s.players.get(effect.entityId);
+                if (player) {
+                    player.resources[effect.resource][effect.field] += effect.delta;
+                }
+                break;
+                
+            case 'UPDATE_QUEUE':
+                if (effect.operation === 'remove') {
+                    removePlayerFromQueue(s, effect.playerId);
+                } else if (effect.operation === 'append') {
+                    // Find the queue index and append
+                    if (effect.queueIndex < s.turnQueues.length) {
+                        s.turnQueues[effect.queueIndex].push(effect.playerId);
+                    }
+                }
+                break;
+                
+            case 'SET_TURN':
+                s.turn = effect.turn;
+                break;
+        }
+    }
 }
 
 function executePlayerAction(s: State, playerAction: PlayerAction, strictOrdering=true): ActionResult {

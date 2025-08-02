@@ -29,9 +29,9 @@ export const actionRegistry: Record<ActionType, ActionDefinition> = {
             const moveCost = getDistance(startPos, endPos);
             
             // validate movement points
-            if (player.movementPoints.current < moveCost) return {
+            if (player.resources.movement.current < moveCost) return {
                 ok: false,
-                error: `insufficient movement points: need ${moveCost}, have ${player.movementPoints.current}`
+                error: `insufficient movement points: need ${moveCost}, have ${player.resources.movement.current}`
             };
 
             // validate target tile
@@ -48,7 +48,7 @@ export const actionRegistry: Record<ActionType, ActionDefinition> = {
             }
             
             // consume movement points
-            player.movementPoints.current -= moveCost;
+            player.resources.movement.current -= moveCost;
             
             return {
                 ok: true,

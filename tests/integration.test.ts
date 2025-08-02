@@ -84,5 +84,5 @@ test("player can move and view updates", () => {
     // Verify movement points were consumed correctly
     const player = reloadedState.players.get(firstPlayer);
     const expectedRemainingPoints = testConfig.default_movement_points - expectedMoveCost;
-    expect(player?.movementPoints.current).toBe(expectedRemainingPoints);
+    expect(player?.resources.movement.current).toBe(expectedRemainingPoints);
 });
