@@ -188,57 +188,6 @@ Available Actions:
 4) destroy primitive farm
 
 
-....
-Sample Json Actions:
-{
-    'action': 'move_towards_world_coordinate',
-    'arguments': {'x': 30, 'y': 30}
-}
-{
-    'action': 'select_action',
-    'arguments': {'selected_action': 2}
-}
-
-
-
-main game loop pseudocode (somewhat dated):
-
-
-S = WorldState()
-main:
-    groups = graphSplitPlayers(S.players)   // connected subgraphs where nodes are players, edges if within movement + view range, to ensure no race conditions
-    for group in groups:                    // .. race conditions wouldn't crash us, but would poison llm context windows with stale/invalid state
-        await runGroupTurn(S, group)
-
-
-async runGroupTurn(S, players):
-    queue = new Queue()
-    insertInRandomOrder(queue, players)
-    while notEmpty(queue):
-        player = queue.pop()
-        turn_ended = await runPlayerTurn(S, player, retries=2)
-        if not turn_ended:
-            queue.insert(player)
-            
-
-async runPlayerTurn(S, player, retries):
-    if retries == 0 return true
-    view = computeViewFor(S, player)                        // ideally, just data; serializable and http-sendable
-    actions = await choose_actions(player, view, GAME_CONFIG)
-    for action in actions:
-        ok, err = execute_action(S, action)                      // atomic on the 1-action level; either it succeeds or does nothing
-        if not ok:
-            log_error(err, S, player, action, actions)
-            await runPlayerTurn(S, player, retries - 1)
-    
-
-type View {
-    tilesInView,
-    structuresInView,
-    playersInView,
-    
-}
-
 
 code/style notes:
     - C style where possible, prefer enums, interfaces, types for data
