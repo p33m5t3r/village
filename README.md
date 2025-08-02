@@ -31,11 +31,8 @@ testing/cleanup:
     [x] make view fns cleaner, spectator friendly
     [x] write basic tests
 puritan refactor:
-    [ ] actions as effects
-    [ ] game effects
-logging:
-    [ ] add basic system logging
-    [ ] add basic event logging
+    [x] actions as effects
+    [x] game effects
     [ ] add event log to player views
 resources:
     [ ] add player inventory
@@ -47,5 +44,13 @@ testing:
     [ ] add tests
 game logic:
     [ ] add more tiles, structures, etc
+
+
+tech debt cleanup running list:
+    - make turn queues into a class
+    - put real ids on events
+
+
+
 
 

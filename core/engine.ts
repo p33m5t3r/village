@@ -1,7 +1,7 @@
-import type { State, Effect, GameEvent } from "./types";
+import type { State, Effect, GameEvent, Action } from "./types";
 import { loadState, saveState } from "./state";
-import { ActionType, type ActionResult, type PlayerAction } from "./types";
-import { actionRegistry } from "../game/actions";
+import { ActionType, type PlayerAction } from "./types";
+import { actionRegistry, createFailedActionEvent } from "../game/actions";
 
 
 // Simple seeded RNG for deterministic testing
@@ -103,6 +103,44 @@ function canDoMoreThisTurn(s: State, playerId: string): boolean {
     return can_move || can_act;
 }
 
+// System event helpers
+function createSystemEvent(s: State, operation: string, effects: Effect[]): GameEvent {
+    return {
+        id: "0",
+        turn: s.turn,
+        timestamp: Date.now().toString(),
+        type: 'SYSTEM',
+        operation: operation as any, // TypeScript will validate the actual usage
+        effects,
+        success: true
+    };
+}
+
+function createRemoveFromQueueEvent(s: State, playerId: string): GameEvent {
+    const queueIndex = findPlayerQueueIndex(s, playerId);
+    return createSystemEvent(s, 'REMOVE_FROM_QUEUE', [
+        { type: 'UPDATE_QUEUE', queueIndex: queueIndex >= 0 ? queueIndex : 0, operation: 'remove', playerId }
+    ]);
+}
+
+function createMoveToBackOfQueueEvent(s: State, playerId: string): GameEvent {
+    const queueIndex = findPlayerQueueIndex(s, playerId);
+    return createSystemEvent(s, 'MOVE_TO_BACK_OF_QUEUE', [
+        { type: 'UPDATE_QUEUE', queueIndex: queueIndex >= 0 ? queueIndex : 0, operation: 'remove', playerId },
+        { type: 'UPDATE_QUEUE', queueIndex: queueIndex >= 0 ? queueIndex : 0, operation: 'append', playerId }
+    ]);
+}
+
+// Helper function to find which queue a player is in
+function findPlayerQueueIndex(s: State, playerId: string): number {
+    for (let i = 0; i < s.turnQueues.length; i++) {
+        if (s.turnQueues[i].includes(playerId)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 function applyEffects(s: State, effects: Effect[]): void {
     for (const effect of effects) {
         switch (effect.type) {
@@ -140,78 +178,24 @@ function executePlayerAction(s: State, playerAction: PlayerAction, strictOrderin
 
     // Check turn order first
     if (!isPlayersTurn(s, playerId, strictOrdering)) {
-        return [{
-            id: "0",
-            turn: s.turn,
-            timestamp: Date.now().toString(),
-            type: 'PLAYER_ACTION',
-            playerId,
-            action,
-            effects: [],
-            success: false,
-            error: `player ${playerId} acted out of turn!`
-        }];
+        return [createFailedActionEvent(s, playerId, action, `player ${playerId} acted out of turn!`)];
     }
     
     // Get the action event (no mutations yet)
     const actionEvent = actionRegistry[action.type].execute(s, playerId, action);
     const events: GameEvent[] = [actionEvent];
     
-    // Add system events for queue management if action succeeded
-    if (actionEvent.success) {
-        if (!canDoMoreThisTurn(s, playerId)) {
-            // Remove from queue entirely
-            events.push({
-                id: "0",
-                turn: s.turn,
-                timestamp: Date.now().toString(),
-                type: 'SYSTEM',
-                operation: 'REMOVE_FROM_QUEUE',
-                effects: [{ type: 'UPDATE_QUEUE', queueIndex: 0, operation: 'remove', playerId }],
-                success: true
-            });
-        } else {
-            // Move to back of queue (remove then append)
-            const queueIndex = findPlayerQueueIndex(s, playerId);
-            if (queueIndex !== -1) {
-                events.push({
-                    id: "0",
-                    turn: s.turn,
-                    timestamp: Date.now().toString(),
-                    type: 'SYSTEM',
-                    operation: 'MOVE_TO_BACK_OF_QUEUE',
-                    effects: [
-                        { type: 'UPDATE_QUEUE', queueIndex, operation: 'remove', playerId },
-                        { type: 'UPDATE_QUEUE', queueIndex, operation: 'append', playerId }
-                    ],
-                    success: true
-                });
-            }
-        }
+    // Add queue management events
+    if (actionEvent.success && !canDoMoreThisTurn(s, playerId)) {
+        events.push(createRemoveFromQueueEvent(s, playerId));
+    } else if (actionEvent.success) {
+        events.push(createMoveToBackOfQueueEvent(s, playerId));
     } else {
         // Failed action - remove from queue
-        events.push({
-            id: "0",
-            turn: s.turn,
-            timestamp: Date.now().toString(),
-            type: 'SYSTEM',
-            operation: 'REMOVE_FROM_QUEUE',
-            effects: [{ type: 'UPDATE_QUEUE', queueIndex: 0, operation: 'remove', playerId }],
-            success: true
-        });
+        events.push(createRemoveFromQueueEvent(s, playerId));
     }
     
     return events;
-}
-
-// Helper function to find which queue a player is in
-function findPlayerQueueIndex(s: State, playerId: string): number {
-    for (let i = 0; i < s.turnQueues.length; i++) {
-        if (s.turnQueues[i].includes(playerId)) {
-            return i;
-        }
-    }
-    return -1;
 }
 
 export type ExecutionConfig = {

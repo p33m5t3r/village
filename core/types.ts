@@ -104,16 +104,6 @@ export type ParamSchema = {
     required: boolean;
 };
 
-export type ActionEvent = {        
-    action: Action;         // action taken
-    playerId: string;       // who took the action
-    startPos: Position;     // world location where the action started
-    endPos?: Position;      // world location where the action ended (for movement)
-    summary: string;        // summary of the effects or reason for error
-};
-
-export type ActionResult = Result<ActionEvent, string>;
-
 export type ActionDefinition = {
     genericDesc: string;
     paramSchemas: ParamSchema[];
